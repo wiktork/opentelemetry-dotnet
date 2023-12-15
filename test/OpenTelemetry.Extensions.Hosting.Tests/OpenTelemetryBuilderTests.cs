@@ -1,7 +1,11 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Diagnostics.Metrics;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Diagnostics.Metrics;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using OpenTelemetry.Logs;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
@@ -12,6 +16,60 @@ namespace OpenTelemetry.Extensions.Hosting.Tests;
 
 public class OpenTelemetryBuilderTests
 {
+    internal sealed class SimpleInstrument : Instrument
+    {
+        public SimpleInstrument(Meter meter, string name, string unit, string description) : base(meter, name, unit, description)
+        {
+        }
+    }
+
+    class CustomExporter : BaseExporter<Metric>
+    {
+        public CustomExporter() : base()
+        {
+        }
+
+        public override ExportResult Export(in Batch<Metric> batch)
+        {
+            return ExportResult.Success;
+        }
+    }
+
+    [Fact]
+    public void TestCustomMetrics()
+    {
+        HostBuilder builder = new HostBuilder();
+        builder.ConfigureServices((s) =>
+        {
+            
+
+            var otelBuilder = s.AddOpenTelemetry();
+            otelBuilder.WithLogging(configure =>
+            {
+            });
+
+            otelBuilder.WithMetrics(configure =>
+            {
+                //configure.AddMeter("System.Runtime");
+                configure.AddReader(new BaseExportingMetricReader(new CustomExporter()));
+            });
+        });
+
+
+
+        var host = builder.Build();
+        var listener = host.Services.GetRequiredService<IMetricsListener>();
+        var instrument = new SimpleInstrument(new Meter("System.Runtime"), "Test", "MiB", "Test");
+
+
+        var f = host.Services.GetRequiredService<ILoggerFactory>();
+        var logger = f.CreateLogger("test");
+        logger.LogInformation("test");
+        //bool result = listener.InstrumentPublished(instrument, out _);
+        //listener.GetMeasurementHandlers().IntHandler(instrument, 5, null, null);
+
+    }
+
     [Fact]
     public void ConfigureResourceTest()
     {
